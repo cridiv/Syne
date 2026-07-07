@@ -5,7 +5,6 @@ import SessionSidebar from '../components/SessionSidebar';
 import ChatPanel from '../components/ChatPanel';
 import MemoryFeed, { MemoryFeedEntry } from '../components/MemoryFeed';
 import { SessionIndex } from '../lib/types';
-import * as crypto from 'crypto';
 
 export default function Home() {
   // Core State
@@ -29,7 +28,7 @@ export default function Home() {
 
   // Initialize a session ID on mount
   useEffect(() => {
-    setSessionId(crypto.randomUUID());
+    setSessionId(self.crypto.randomUUID());
   }, []);
 
   // Handler for when the agent successfully pins a turn to Filecoin
@@ -178,7 +177,7 @@ export default function Home() {
 
   // Handler to initialize a new session
   const handleNewSession = () => {
-    setSessionId(crypto.randomUUID());
+    setSessionId(self.crypto.randomUUID());
     setLatestCid(null);
     setMessages([]);
     setMemoryFeed([]);

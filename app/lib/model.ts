@@ -40,7 +40,7 @@ export async function callModel(
   const reasoningEffort = options.reasoningEffort ?? 'high';
 
   const completion = await getClient().chat.completions.create({
-    model: 'deepseek-ai/deepseek-v4-flash',
+    model: 'qwen/qwen3-next-80b-a3b-instruct',
     messages: messages as any,
     temperature: temperature,
     top_p: 0.95,
