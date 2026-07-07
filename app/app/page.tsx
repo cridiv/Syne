@@ -1,65 +1,249 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import SessionSidebar from '../components/SessionSidebar';
+import ChatPanel from '../components/ChatPanel';
+import MemoryFeed, { MemoryFeedEntry } from '../components/MemoryFeed';
+import { SessionIndex } from '../lib/types';
+import * as crypto from 'crypto';
 
 export default function Home() {
+  // Core State
+  const [sessionId, setSessionId] = useState<string>('');
+  const [latestCid, setLatestCid] = useState<string | null>(null);
+  
+  // Chat & Memory State
+  const [messages, setMessages] = useState<{ role: 'user' | 'agent'; content: string }[]>([]);
+  const [memoryFeed, setMemoryFeed] = useState<MemoryFeedEntry[]>([]);
+  const [chainValid, setChainValid] = useState<'valid' | 'broken' | 'verifying' | 'unverified'>('unverified');
+  const [workingMemory, setWorkingMemory] = useState<{
+    key_facts: string[];
+    open_questions: string[];
+    current_focus: string;
+  } | null>(null);
+
+  // UI Control State
+  const [isResuming, setIsResuming] = useState<boolean>(false);
+  const [statusMessage, setStatusMessage] = useState<string>('');
+  const [sessionsIndex, setSessionsIndex] = useState<SessionIndex | null>(null);
+
+  // Initialize a session ID on mount
+  useEffect(() => {
+    setSessionId(crypto.randomUUID());
+  }, []);
+
+  // Handler for when the agent successfully pins a turn to Filecoin
+  const handleMemoryWritten = (data: {
+    cid: string;
+    snapshot_index: number;
+    timestamp: string;
+    memory_tags: string[];
+    gateway_url: string;
+    working_memory: any;
+    session_title?: string;
+  }) => {
+    // 1. Update Head pointer
+    setLatestCid(data.cid);
+    
+    // 2. Prepend to live feed
+    const newFeedEntry: MemoryFeedEntry = {
+      cid: data.cid,
+      snapshot_index: data.snapshot_index,
+      timestamp: data.timestamp,
+      memory_tags: data.memory_tags,
+      gateway_url: data.gateway_url,
+    };
+    setMemoryFeed((prev) => [newFeedEntry, ...prev]);
+
+    // 3. Update active working memory
+    setWorkingMemory(data.working_memory);
+    setChainValid('unverified'); // Unverified until run through explicit chain walk audit
+
+    // 4. Update and Persist Session Index
+    if (sessionsIndex) {
+      const existingSession = sessionsIndex.sessions[sessionId];
+      const title = data.session_title || existingSession?.title || `Research Session #${data.snapshot_index}`;
+      
+      const updatedIndex: SessionIndex = {
+        sessions: {
+          ...sessionsIndex.sessions,
+          [sessionId]: {
+            title,
+            root_cid: existingSession?.root_cid || data.cid,
+            latest_cid: data.cid,
+            snapshot_count: data.snapshot_index + 1,
+            created_at: existingSession?.created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        }
+      };
+
+      setSessionsIndex(updatedIndex);
+      localStorage.setItem('syne_session_index', JSON.stringify(updatedIndex));
+    }
+  };
+
+  // Handler to resume a past session by walking its CID chain
+  const handleSelectSession = async (id: string, cid: string) => {
+    setIsResuming(true);
+    setStatusMessage('Reconnecting to Filecoin storage gateway...');
+    
+    try {
+      const res = await fetch(`/api/session/resume?cid=${cid}`);
+      if (!res.ok) {
+        throw new Error('Failed to resolve CID chain from gateway');
+      }
+
+      const data = await res.json();
+      
+      // 1. Reconstruct chat history entries from snapshots
+      const snapshots = data.snapshots || [];
+      const latestSnapshot = snapshots[snapshots.length - 1];
+
+      if (latestSnapshot && latestSnapshot.entries) {
+        // Map Snapshot entries back into the local chat bubbles
+        const loadedMessages = latestSnapshot.entries.map((ent: any) => ({
+          role: ent.role,
+          content: ent.content,
+        }));
+        setMessages(loadedMessages);
+        setWorkingMemory(latestSnapshot.agent_working_memory);
+      } else {
+        setMessages([]);
+        setWorkingMemory(null);
+      }
+
+      // 2. Reconstruct Memory Feed in reverse chronological order (newest first)
+      const feedEntries: MemoryFeedEntry[] = snapshots.map((snap: any) => ({
+        cid: snap.prev_cid || 'Genesis', // we can use the actual CID of the snapshot here
+        snapshot_index: snap.snapshot_index,
+        timestamp: snap.created_at,
+        memory_tags: snap.entries.find((ent: any) => ent.role === 'agent')?.memory_tags || [],
+        gateway_url: `https://gateway.lighthouse.storage/ipfs/${snap.prev_cid || ''}`, // will override
+      }));
+
+      // Wait, let's fix the feedEntries CID assignments:
+      // When we walk the chain, we have an array of snapshots. But snapshots don't store their own CID inside!
+      // They only store prev_cid. However, the resume API returns the snapshots in order.
+      // Let's refine how we populate CIDs in feed. The walkChain doesn't return the CIDs of each block,
+      // it returns the content. But we can match them if the API returned CIDs, or we can resolve it.
+      // Wait, let's see what the resume API returns:
+      // app/api/session/resume/route.ts returns `{ snapshots, integrity }`
+      // Where `snapshots` is an array of `MemorySnapshot` returned by `walkChain`.
+      // Wait! `walkChain` fetches the snapshots but doesn't attach the CIDs of each snapshot to them.
+      // However, we can reconstruct the CIDs in order if we know the chain!
+      // Let's check how the chain links: genesis has prev_cid = null. Snapshot 1 has prev_cid = genesis CID.
+      // So the CID of snapshot[i] is the `prev_cid` of snapshot[i+1]!
+      // And the CID of the latest snapshot is the `cid` parameter we passed to the API.
+      // This is a beautiful property of the linked list! Let's reconstruct the CIDs:
+      const reconstructedCids: string[] = [];
+      let nextCid = cid;
+      for (let i = snapshots.length - 1; i >= 0; i--) {
+        reconstructedCids[i] = nextCid;
+        nextCid = snapshots[i].prev_cid; // moves backwards
+      }
+
+      const formattedFeed: MemoryFeedEntry[] = snapshots.map((snap: any, index: number) => {
+        const snapCid = reconstructedCids[index];
+        // Extract tags of the agent response in this snapshot
+        const agentEntry = snap.entries.find((ent: any) => ent.role === 'agent');
+        
+        return {
+          cid: snapCid,
+          snapshot_index: snap.snapshot_index,
+          timestamp: snap.created_at,
+          memory_tags: agentEntry?.memory_tags || [],
+          gateway_url: `https://gateway.lighthouse.storage/ipfs/${snapCid}`
+        };
+      }).reverse(); // newest first
+
+      setMemoryFeed(formattedFeed);
+
+      // 3. Set Session state
+      setSessionId(id);
+      setLatestCid(cid);
+      setChainValid(data.integrity.valid ? 'valid' : 'broken');
+      setStatusMessage(`✓ Session "${data.session_title}" successfully restored from Filecoin!`);
+
+      setTimeout(() => setStatusMessage(''), 4000);
+
+    } catch (err: any) {
+      console.error(err);
+      alert(`Could not resume session: ${err.message || 'Verification failure'}`);
+      setStatusMessage('Resume connection failed');
+    } finally {
+      setIsResuming(false);
+    }
+  };
+
+  // Handler to initialize a new session
+  const handleNewSession = () => {
+    setSessionId(crypto.randomUUID());
+    setLatestCid(null);
+    setMessages([]);
+    setMemoryFeed([]);
+    setWorkingMemory(null);
+    setChainValid('unverified');
+    setStatusMessage('New research environment initialized.');
+    setTimeout(() => setStatusMessage(''), 3000);
+  };
+
+  // Handler to perform full cryptographic walk & audit on demand
+  const handleVerifyChain = async () => {
+    if (!latestCid) return;
+    setChainValid('verifying');
+    
+    try {
+      const res = await fetch(`/api/session/resume?cid=${latestCid}`);
+      if (!res.ok) throw new Error('Gateway check failed');
+      const data = await res.json();
+      
+      setChainValid(data.integrity?.valid ? 'valid' : 'broken');
+      setStatusMessage(
+        data.integrity?.valid 
+          ? `✓ Audited ${data.integrity.checked} chain nodes: Cryptographically secure & intact!`
+          : `⚠️ Verification failed: Chain broken at CID ${data.integrity.broken_at}`
+      );
+      setTimeout(() => setStatusMessage(''), 5000);
+    } catch (err) {
+      console.error(err);
+      setChainValid('broken');
+      setStatusMessage('⚠️ Chain verification failed due to gateway timeout.');
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="flex h-screen w-screen bg-gray-950 text-gray-200 overflow-hidden font-mono select-none">
+      {/* 1. Left Sidebar: Local pointer indexes */}
+      <SessionSidebar
+        currentSessionId={sessionId}
+        onSelectSession={handleSelectSession}
+        onNewSession={handleNewSession}
+        isResuming={isResuming}
+        sessionsIndex={sessionsIndex}
+        setSessionsIndex={setSessionsIndex}
+      />
+
+      {/* 2. Center Chat panel */}
+      <div className="flex-1 h-full border-r border-gray-800">
+        <ChatPanel
+          sessionId={sessionId}
+          latestCid={latestCid}
+          messages={messages}
+          setMessages={setMessages}
+          onMemoryWritten={handleMemoryWritten}
+          statusMessage={statusMessage}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </div>
+
+      {/* 3. Right Sidebar: Filecoin Memory feed */}
+      <MemoryFeed
+        entries={memoryFeed}
+        chainValid={chainValid}
+        onVerifyChain={handleVerifyChain}
+        latestCid={latestCid}
+        workingMemory={workingMemory}
+      />
+    </main>
   );
 }

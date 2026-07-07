@@ -1,11 +1,20 @@
 import OpenAI from 'openai';
 
-// Initialize the OpenAI client pointing to NVIDIA's NIM API
-// Expects NVIDIA_API_KEY to be set in environment variables
-const client = new OpenAI({
-  baseURL: 'https://integrate.api.nvidia.com/v1',
-  apiKey: process.env.MODEL_API_KEY || '',
-});
+let clientInstance: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!clientInstance) {
+    const apiKey = process.env.MODEL_API_KEY;
+    if (!apiKey) {
+      throw new Error('MODEL_API_KEY environment variable is not defined!');
+    }
+    clientInstance = new OpenAI({
+      baseURL: 'https://integrate.api.nvidia.com/v1',
+      apiKey: apiKey,
+    });
+  }
+  return clientInstance;
+}
 
 export interface ModelMessage {
   role: 'system' | 'user' | 'assistant';
@@ -30,20 +39,18 @@ export async function callModel(
   const temperature = options.temperature ?? 1;
   const reasoningEffort = options.reasoningEffort ?? 'high';
 
-  const completion = await client.chat.completions.create({
+  const completion = await getClient().chat.completions.create({
     model: 'deepseek-ai/deepseek-v4-flash',
-    messages: messages,
+    messages: messages as any,
     temperature: temperature,
     top_p: 0.95,
     max_tokens: 16384,
-    extra_body: {
-      chat_template_kwargs: {
-        thinking: true,
-        reasoning_effort: reasoningEffort,
-      },
+    chat_template_kwargs: {
+      thinking: true,
+      reasoning_effort: reasoningEffort,
     },
     stream: false,
-  });
+  } as any);
 
   const choice = completion.choices[0];
   const content = choice.message?.content || '';

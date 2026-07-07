@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MemoryOS (Syne)
 
-## Getting Started
+An AI agent with a public, verifiable reasoning memory — written permanently to Filecoin in real time.
 
-First, run the development server:
+MemoryOS is a research agent that remembers everything—across browser sessions, devices, and time—completely serverless. Every conversational step and reasoning block is pinned to the Filecoin network, generating an immutable, cryptographic chain of thought.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Key Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. **Tamper-Evident Memory Chain**: Each memory snapshot links back to its parent using a `prev_cid` pointer. This builds an append-only cryptographic linked list directly on Filecoin.
+2. **Zero-Database Session Resume**: Reconstructs complete agent context, facts, and chat histories entirely by walking the CID chain backward to the genesis snapshot.
+3. **Decentralized Verification**: Integrates a "Verify Chain" utility to audit the integrity of the chain against multiple public gateways.
+4. **DeepSeek v4 Brain**: Powered by `deepseek-ai/deepseek-v4-flash` via NVIDIA NIM with intermediate reasoning and cognitive trace extraction.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Filecoin Primitives & SDK Integration
 
-## Learn More
+- **Filecoin Storage**: Pinned via the `@lighthouse-web3/sdk` to IPFS and the Filecoin network.
+- **Content Addressing**: CIDs are the primary identity of each memory snapshot, establishing cryptographic verify paths.
+- **Multi-Gateway Fallbacks**: Resolves snapshot queries using a sequential fallback strategy across public IPFS gateways (Cloudflare, IPFS.io, dweb.link, Pinata) to ensure high availability and bypass gateway rate limits.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Framework**: Next.js 15 / Next.js 16 (App Router) + Tailwind CSS (v4)
+- **Agent API**: DeepSeek-v4-flash (NVIDIA NIM via OpenAI SDK compatibility)
+- **Storage Client**: Lighthouse.storage SDK (Filecoin pinning)
+- **Icons**: Lucide React
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Setup
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Clone this repository**:
+   ```bash
+   git clone https://github.com/cridiv/Syne.git
+   cd Syne/app
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment keys**:
+   Create a `.env.local` inside the `app/` folder with the following properties:
+   ```env
+   # API credentials
+   MODEL_API_KEY="your_nvidia_nim_api_key"
+   LIGHTHOUSE_API_KEY="your_lighthouse_api_key"
+   
+   # (Optional) Custom dedicated gateway subdomain to bypass public rate limits
+   LIGHTHOUSE_GATEWAY="https://<your-subdomain>.lighthouse.storage/ipfs"
+   ```
+
+4. **Run the local development server**:
+   ```bash
+   npm run dev
+   ```
+   Open `http://localhost:3000` to interact with MemoryOS.
+
+---
+
+## Verification & Manual Testing Scripts
+
+You can run isolated CLI tests inside the `app/` folder:
+
+*   **Test Model Brain (DeepSeek-v4-flash + Reasoning extraction)**:
+    ```bash
+    npx tsx test_agent.ts
+    ```
+*   **Test Filecoin Snapshots Chaining and Walk**:
+    ```bash
+    npx tsx test_chain.ts
+    ```
+*   **Test general network fetch permissions**:
+    ```bash
+    npx tsx test_fetch.ts
+    ```
