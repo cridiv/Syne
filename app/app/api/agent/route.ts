@@ -13,7 +13,7 @@ import { pinSnapshot, fetchSnapshot, gatewayUrl } from '@/lib/filecoin';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { user_message, session_id, latest_cid } = body;
+    const { user_message, session_id, latest_cid, previous_snapshot } = body;
 
     // Validate request inputs
     if (!user_message || !user_message.trim()) {
@@ -23,9 +23,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'session_id is required' }, { status: 400 });
     }
 
-    // 1. Fetch previous snapshot from Filecoin/IPFS if latest_cid exists
+    // 1. Fetch previous snapshot from Filecoin/IPFS if latest_cid exists and not provided by client
     let previousSnapshot = null;
-    if (latest_cid) {
+    if (previous_snapshot) {
+      console.log('Using client-provided previous snapshot context, skipping Filecoin read.');
+      previousSnapshot = previous_snapshot;
+    } else if (latest_cid) {
       try {
         console.log(`Fetching previous snapshot from Filecoin for CID: ${latest_cid}`);
         previousSnapshot = await fetchSnapshot(latest_cid);
@@ -58,6 +61,7 @@ export async function POST(req: NextRequest) {
       memory_tags,
       working_memory: new_snapshot.agent_working_memory,
       gateway_url: gatewayUrl(newCid),
+      new_snapshot: new_snapshot,
     });
 
   } catch (error: any) {

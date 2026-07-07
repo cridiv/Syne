@@ -2,11 +2,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Brain, Check, Terminal } from 'lucide-react';
-import { MemoryEntry } from '../lib/types';
+import { MemoryEntry, MemorySnapshot } from '../lib/types';
 
 interface ChatPanelProps {
   sessionId: string;
   latestCid: string | null;
+  latestSnapshot: MemorySnapshot | null;
   messages: { role: 'user' | 'agent'; content: string }[];
   setMessages: React.Dispatch<React.SetStateAction<{ role: 'user' | 'agent'; content: string }[]>>;
   onMemoryWritten: (entry: {
@@ -16,6 +17,7 @@ interface ChatPanelProps {
     memory_tags: string[];
     gateway_url: string;
     working_memory: any;
+    new_snapshot: MemorySnapshot;
   }) => void;
   statusMessage?: string;
 }
@@ -23,6 +25,7 @@ interface ChatPanelProps {
 export default function ChatPanel({
   sessionId,
   latestCid,
+  latestSnapshot,
   messages,
   setMessages,
   onMemoryWritten,
@@ -59,6 +62,7 @@ export default function ChatPanel({
           user_message: userMessage,
           session_id: sessionId,
           latest_cid: latestCid,
+          previous_snapshot: latestSnapshot,
         }),
       });
 
@@ -81,6 +85,7 @@ export default function ChatPanel({
         memory_tags: data.memory_tags || [],
         gateway_url: data.gateway_url,
         working_memory: data.working_memory,
+        new_snapshot: data.new_snapshot,
       });
 
       // Clear status after 4 seconds

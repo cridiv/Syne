@@ -66,7 +66,7 @@ Full history summary: ${previous_snapshot.entries.length} exchanges recorded.`;
 
   // 3. Query the DeepSeek v4 model on NVIDIA NIM
   console.log('Sending agent query to DeepSeek-v4-flash (NVIDIA NIM)...');
-  const result = await callModel(messages, { temperature: 0.7, reasoningEffort: 'high' });
+  const result = await callModel(messages, { temperature: 1.0 });
   const rawContent = result.content;
   
   // Log reasoning output if returned

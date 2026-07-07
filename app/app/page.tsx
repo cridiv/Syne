@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import SessionSidebar from '../components/SessionSidebar';
 import ChatPanel from '../components/ChatPanel';
 import MemoryFeed, { MemoryFeedEntry } from '../components/MemoryFeed';
-import { SessionIndex } from '../lib/types';
+import { SessionIndex, MemorySnapshot } from '../lib/types';
 
 export default function Home() {
   // Core State
@@ -25,6 +25,7 @@ export default function Home() {
   const [isResuming, setIsResuming] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [sessionsIndex, setSessionsIndex] = useState<SessionIndex | null>(null);
+  const [latestSnapshot, setLatestSnapshot] = useState<MemorySnapshot | null>(null);
 
   // Initialize a session ID on mount
   useEffect(() => {
@@ -40,9 +41,11 @@ export default function Home() {
     gateway_url: string;
     working_memory: any;
     session_title?: string;
+    new_snapshot: MemorySnapshot;
   }) => {
     // 1. Update Head pointer
     setLatestCid(data.cid);
+    setLatestSnapshot(data.new_snapshot);
     
     // 2. Prepend to live feed
     const newFeedEntry: MemoryFeedEntry = {
@@ -107,9 +110,11 @@ export default function Home() {
         }));
         setMessages(loadedMessages);
         setWorkingMemory(latestSnapshot.agent_working_memory);
+        setLatestSnapshot(latestSnapshot);
       } else {
         setMessages([]);
         setWorkingMemory(null);
+        setLatestSnapshot(null);
       }
 
       // 2. Reconstruct Memory Feed in reverse chronological order (newest first)
@@ -179,6 +184,7 @@ export default function Home() {
   const handleNewSession = () => {
     setSessionId(self.crypto.randomUUID());
     setLatestCid(null);
+    setLatestSnapshot(null);
     setMessages([]);
     setMemoryFeed([]);
     setWorkingMemory(null);
@@ -228,6 +234,7 @@ export default function Home() {
         <ChatPanel
           sessionId={sessionId}
           latestCid={latestCid}
+          latestSnapshot={latestSnapshot}
           messages={messages}
           setMessages={setMessages}
           onMemoryWritten={handleMemoryWritten}

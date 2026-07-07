@@ -34,20 +34,19 @@ export interface ModelResponse {
  */
 export async function callModel(
   messages: ModelMessage[],
-  options: { temperature?: number; reasoningEffort?: 'low' | 'medium' | 'high' } = {}
+  options: { temperature?: number } = {}
 ): Promise<ModelResponse> {
   const temperature = options.temperature ?? 1;
-  const reasoningEffort = options.reasoningEffort ?? 'high';
 
   const completion = await getClient().chat.completions.create({
-    model: 'qwen/qwen3-next-80b-a3b-instruct',
+    model: 'deepseek-ai/deepseek-v4-flash',
     messages: messages as any,
     temperature: temperature,
     top_p: 0.95,
     max_tokens: 16384,
     chat_template_kwargs: {
       thinking: true,
-      reasoning_effort: reasoningEffort,
+      reasoning_effort: 'high',
     },
     stream: false,
   } as any);
@@ -55,7 +54,7 @@ export async function callModel(
   const choice = completion.choices[0];
   const content = choice.message?.content || '';
 
-  // Extract reasoning content using typical custom fields returned by DeepSeek on NVIDIA NIM
+  // Extract reasoning content (if supported by Qwen or future reasoning models)
   const reasoning =
     (choice.message as any).reasoning ||
     (choice.message as any).reasoning_content ||
