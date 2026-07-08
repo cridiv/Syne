@@ -22,7 +22,7 @@ async function testNativeUpload() {
     const blob = new Blob([json], { type: 'application/json' });
     formData.append('file', blob, 'snapshot.json');
 
-    const res = await fetch('https://node.lighthouse.storage/api/v0/add', {
+    const res = await fetch('https://upload.lighthouse.storage/api/v0/add?cid-version=1', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
