@@ -1,4 +1,3 @@
-import lighthouse from '@lighthouse-web3/sdk';
 import { MemorySnapshot } from './types';
 import dns from 'dns';
 
@@ -28,11 +27,31 @@ export async function pinSnapshot(snapshot: MemorySnapshot): Promise<string> {
   }
 
   const json = JSON.stringify(snapshot, null, 2);
-  
-  let response;
+
   try {
-    // Use uploadText for reliable Node.js server execution without File/Blob class incompatibilities
-    response = await lighthouse.uploadText(json, apiKey);
+    const formData = new FormData();
+    const blob = new Blob([json], { type: 'application/json' });
+    formData.append('file', blob, 'snapshot.json');
+
+    const res = await fetch('https://node.lighthouse.storage/api/v0/add', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Lighthouse responded with ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    if (!data || !data.Hash) {
+      throw new Error('Invalid response from Lighthouse API');
+    }
+
+    return data.Hash;
   } catch (err: any) {
     console.error('[Lighthouse Upload Error] Failed to connect to Lighthouse API:', err.message || err);
     if (err.cause) {
@@ -40,12 +59,6 @@ export async function pinSnapshot(snapshot: MemorySnapshot): Promise<string> {
     }
     throw new Error(`Lighthouse upload failed: ${err.message || err}`);
   }
-  
-  if (!response || !response.data || !response.data.Hash) {
-    throw new Error('Failed to pin snapshot to Lighthouse: Invalid response format');
-  }
-
-  return response.data.Hash;
 }
 
 /**
