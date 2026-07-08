@@ -1,5 +1,11 @@
 import lighthouse from '@lighthouse-web3/sdk';
 import { MemorySnapshot } from './types';
+import dns from 'dns';
+
+// Force Node.js fetch to resolve IPv4 first (fixes ENOTFOUND/fetch failed on IPv4-only networks)
+if (typeof window === 'undefined') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const GATEWAY = 'https://gateway.lighthouse.storage/ipfs';
 
@@ -23,8 +29,17 @@ export async function pinSnapshot(snapshot: MemorySnapshot): Promise<string> {
 
   const json = JSON.stringify(snapshot, null, 2);
   
-  // Use uploadText for reliable Node.js server execution without File/Blob class incompatibilities
-  const response = await lighthouse.uploadText(json, apiKey);
+  let response;
+  try {
+    // Use uploadText for reliable Node.js server execution without File/Blob class incompatibilities
+    response = await lighthouse.uploadText(json, apiKey);
+  } catch (err: any) {
+    console.error('[Lighthouse Upload Error] Failed to connect to Lighthouse API:', err.message || err);
+    if (err.cause) {
+      console.error('[Lighthouse Upload Error] Root Cause:', err.cause);
+    }
+    throw new Error(`Lighthouse upload failed: ${err.message || err}`);
+  }
   
   if (!response || !response.data || !response.data.Hash) {
     throw new Error('Failed to pin snapshot to Lighthouse: Invalid response format');
@@ -39,15 +54,43 @@ export async function pinSnapshot(snapshot: MemorySnapshot): Promise<string> {
  * @returns The MemorySnapshot object
  */
 export async function fetchSnapshot(cid: string): Promise<MemorySnapshot> {
+  // --- STRATEGY 1: Authenticated Lighthouse API download (fastest, no propagation delay) ---
+  const apiKey = process.env.LIGHTHOUSE_API_KEY;
+  if (apiKey) {
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 15000);
+      const lighthouseRes = await fetch(`https://gateway.lighthouse.storage/ipfs/${cid}`, {
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json',
+        }
+      });
+      clearTimeout(id);
+
+      if (lighthouseRes.ok) {
+        console.log(`[fetchSnapshot] Retrieved CID ${cid} via authenticated Lighthouse gateway.`);
+        return await lighthouseRes.json() as MemorySnapshot;
+      }
+      console.warn(`[fetchSnapshot] Authenticated Lighthouse gateway returned ${lighthouseRes.status} for CID ${cid}, falling back to public gateways.`);
+    } catch (err: any) {
+      console.warn(`[fetchSnapshot] Authenticated Lighthouse fetch failed:`, err.message || err);
+    }
+  }
+
+  // --- STRATEGY 2: Public IPFS gateway fallback ---
   const customGateway = process.env.LIGHTHOUSE_GATEWAY || process.env.NEXT_PUBLIC_LIGHTHOUSE_GATEWAY;
   
   const gateways = [
     ...(customGateway ? [customGateway.replace(/\/$/, '')] : []),
+    'https://w3s.link/ipfs',
+    'https://nftstorage.link/ipfs',
+    'https://gw.crustfiles.app/ipfs',
     'https://cloudflare-ipfs.com/ipfs',
     'https://ipfs.io/ipfs',
     'https://dweb.link/ipfs',
     'https://gateway.pinata.cloud/ipfs',
-    'https://gateway.lighthouse.storage/ipfs'
   ];
 
   let lastError: any = null;
@@ -55,11 +98,16 @@ export async function fetchSnapshot(cid: string): Promise<MemorySnapshot> {
   for (const gateway of gateways) {
     const url = `${gateway}/${cid}`;
     try {
-      // Use standard fetch. Add a timeout to prevent waiting indefinitely on slow gateways.
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 6000); // 6 second timeout
+      const id = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, { 
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+        }
+      });
       clearTimeout(id);
 
       if (response.ok) {

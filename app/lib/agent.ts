@@ -30,6 +30,7 @@ export interface AgentTurnOutput {
   response: string;
   new_snapshot: MemorySnapshot;
   memory_tags: string[];
+  model_duration: number;
 }
 
 /**
@@ -64,9 +65,9 @@ Full history summary: ${previous_snapshot.entries.length} exchanges recorded.`;
     }
   ];
 
-  // 3. Query the DeepSeek v4 model on NVIDIA NIM
-  console.log('Sending agent query to DeepSeek-v4-flash (NVIDIA NIM)...');
-  const result = await callModel(messages, { temperature: 1.0 });
+  // 3. Query the Llama model on NVIDIA NIM
+  console.log('Sending agent query to Llama-3.1-8b-instruct (NVIDIA NIM)...');
+  const result = await callModel(messages, { temperature: 0.2 });
   const rawContent = result.content;
   
   // Log reasoning output if returned
@@ -144,5 +145,6 @@ Full history summary: ${previous_snapshot.entries.length} exchanges recorded.`;
     response: parsed.response,
     new_snapshot: newSnapshot,
     memory_tags: parsed.memory_tags,
+    model_duration: result.duration,
   };
 }

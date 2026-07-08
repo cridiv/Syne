@@ -24,6 +24,7 @@ export interface ModelMessage {
 export interface ModelResponse {
   content: string;
   reasoning: string | null;
+  duration: number; // duration in seconds
 }
 
 /**
@@ -36,20 +37,18 @@ export async function callModel(
   messages: ModelMessage[],
   options: { temperature?: number } = {}
 ): Promise<ModelResponse> {
-  const temperature = options.temperature ?? 1;
+  const temperature = options.temperature ?? 0.2;
 
+  const start = performance.now();
   const completion = await getClient().chat.completions.create({
-    model: 'deepseek-ai/deepseek-v4-flash',
+    model: 'meta/llama-3.1-8b-instruct',
     messages: messages as any,
     temperature: temperature,
-    top_p: 0.95,
-    max_tokens: 16384,
-    chat_template_kwargs: {
-      thinking: true,
-      reasoning_effort: 'high',
-    },
+    top_p: 0.7,
+    max_tokens: 1024,
     stream: false,
-  } as any);
+  });
+  const duration = (performance.now() - start) / 1000;
 
   const choice = completion.choices[0];
   const content = choice.message?.content || '';
@@ -63,5 +62,6 @@ export async function callModel(
   return {
     content,
     reasoning,
+    duration,
   };
 }

@@ -11,6 +11,7 @@ import { pinSnapshot, fetchSnapshot, gatewayUrl } from '@/lib/filecoin';
  * - latest_cid (string | null): The CID of the previous memory snapshot
  */
 export async function POST(req: NextRequest) {
+  const startTime = performance.now();
   try {
     const body = await req.json();
     const { user_message, session_id, latest_cid, previous_snapshot } = body;
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Run the agent turn (calls DeepSeek model)
-    const { response, new_snapshot, memory_tags } = await runAgentTurn({
+    const { response, new_snapshot, memory_tags, model_duration } = await runAgentTurn({
       user_message,
       previous_snapshot: previousSnapshot,
       session_id,
@@ -49,10 +50,15 @@ export async function POST(req: NextRequest) {
 
     // 4. Pin the new snapshot to Filecoin
     console.log(`Pinning new snapshot (index ${new_snapshot.snapshot_index}) to Filecoin...`);
+    const pinStart = performance.now();
     const newCid = await pinSnapshot(new_snapshot);
-    console.log(`Successfully pinned! New CID: ${newCid}`);
+    const pinDuration = (performance.now() - pinStart) / 1000;
+    console.log(`Successfully pinned! New CID: ${newCid} in ${pinDuration.toFixed(2)}s`);
 
-    // 5. Return response and metadata
+    const totalDuration = (performance.now() - startTime) / 1000;
+    console.log(`[Metrics] Model: ${model_duration.toFixed(2)}s | Filecoin Pin: ${pinDuration.toFixed(2)}s | Total: ${totalDuration.toFixed(2)}s`);
+
+    // 5. Return response and metadata with latencies
     return NextResponse.json({
       response,
       new_cid: newCid,
@@ -62,6 +68,11 @@ export async function POST(req: NextRequest) {
       working_memory: new_snapshot.agent_working_memory,
       gateway_url: gatewayUrl(newCid),
       new_snapshot: new_snapshot,
+      latencies: {
+        model: model_duration,
+        filecoin: pinDuration,
+        total: totalDuration
+      }
     });
 
   } catch (error: any) {

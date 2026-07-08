@@ -75,7 +75,12 @@ export default function ChatPanel({
 
       // 3. Append response
       setMessages((prev) => [...prev, { role: 'agent', content: data.response }]);
-      setStatus(`✓ Pinned to Filecoin — CID #${data.snapshot_index}`);
+      
+      const latencies = data.latencies;
+      const latencyStr = latencies 
+        ? ` (Model: ${latencies.model.toFixed(1)}s, Pin: ${latencies.filecoin.toFixed(1)}s)`
+        : '';
+      setStatus(`✓ Pinned to Filecoin — CID #${data.snapshot_index}${latencyStr}`);
 
       // 4. Callback to update feed and latestCid
       onMemoryWritten({
