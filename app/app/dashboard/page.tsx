@@ -249,8 +249,18 @@ export default function Home() {
                 let errorMsg = 'Verification failed';
                 try {
                     const text = await res.text();
-                    errorMsg = text.slice(0, 100).replace(/<[^>]*>/g, '') || errorMsg;
-                } catch (_) {}
+                    const titleMatch = text.match(/<title>([^<]+)<\/title>/i);
+                    const h1Match = text.match(/<h1>([^<]+)<\/h1>/i);
+                    if (titleMatch && titleMatch[1]) {
+                        errorMsg = titleMatch[1].trim();
+                    } else if (h1Match && h1Match[1]) {
+                        errorMsg = h1Match[1].trim();
+                    } else {
+                        errorMsg = `HTTP Error ${res.status}`;
+                    }
+                } catch (_) {
+                    errorMsg = `HTTP Error ${res.status}`;
+                }
                 throw new Error(errorMsg);
             }
             const data = await res.json();

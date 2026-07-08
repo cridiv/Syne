@@ -75,10 +75,20 @@ export default function ChatPanel({
             errorMsg = errorData.error || errorMsg;
           } else {
             const text = await res.text();
-            errorMsg = text.slice(0, 150).replace(/<[^>]*>/g, '').trim() || `Status ${res.status}`;
+            // Clean extraction of <title> or <h1> content from HTML pages
+            const titleMatch = text.match(/<title>([^<]+)<\/title>/i);
+            const h1Match = text.match(/<h1>([^<]+)<\/h1>/i);
+            
+            if (titleMatch && titleMatch[1]) {
+              errorMsg = titleMatch[1].trim();
+            } else if (h1Match && h1Match[1]) {
+              errorMsg = h1Match[1].trim();
+            } else {
+              errorMsg = `HTTP Error ${res.status}`;
+            }
           }
         } catch (_) {
-          errorMsg = `Status ${res.status}`;
+          errorMsg = `HTTP Error ${res.status}`;
         }
         throw new Error(errorMsg);
       }
