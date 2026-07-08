@@ -17,7 +17,7 @@ Modern AI agents suffer from memory editing, context loss, and centralized state
 ## 🛠️ Tech Stack & Primitives
 
 - **Frontend / Routing**: Next.js 16 (App Router) + Tailwind CSS (v4)
-- **Agent Intelligence**: Llama 3.1 8B (`meta/llama-3.1-8b-instruct`) via NVIDIA NIM
+- **Agent Intelligence**: Llama 3.1 8B (`meta/llama-3.1-8b-instruct`)
 - **Storage Protocol**: Filecoin (Lighthouse.storage)
 - **Native Chaining Integration**: Custom `fetch` & `FormData` upload client for zero WebAssembly overhead on Serverless/Edge runtimes.
 
@@ -29,6 +29,10 @@ Modern AI agents suffer from memory editing, context loss, and centralized state
 Syne/
 ├── README.md             <- Root documentation (this file)
 ├── package.json          <- Root workspace packages
+├── .agents/              <- Agent Customization & Skill Registry
+│   ├── AGENTS.md         <- System-level constraints & identity configuration
+│   └── skills/           <- Executable agent skills
+│       └── syne-memory/  <- Chained state persistence skill
 ├── app/                  <- Next.js application directory
 │   ├── app/              <- Page router (Landing page on /, Workspace on /dashboard)
 │   ├── components/       <- UI Components (ChatPanel, SessionSidebar, MemoryFeed)
@@ -55,7 +59,6 @@ npm install
 ### 3. Configure Environment Keys
 Create a `.env.local` file inside the `app/` folder:
 ```env
-# NVIDIA NIM API key for Llama 3.1 8B Model
 MODEL_API_KEY="your_nvidia_nim_api_key"
 
 # Lighthouse.storage API key for Filecoin uploads & verification
