@@ -2,7 +2,7 @@ import { callModel, ModelMessage } from './model';
 import { MemorySnapshot, MemoryEntry, AgentWorkingMemory } from './types';
 import * as crypto from 'crypto';
 
-export const SYSTEM_PROMPT = `You are MemoryOS (Syne), an AI research agent with a persistent, verifiable memory stored permanently on Filecoin.
+export const SYSTEM_PROMPT = `You are Syne, an AI research agent with a persistent, verifiable memory stored permanently on Filecoin.
 
 Your memory is public and append-only. Every conversation turn you take is written to Filecoin with a unique Content Identifier (CID).
 
@@ -69,7 +69,7 @@ Full history summary: ${previous_snapshot.entries.length} exchanges recorded.`;
   console.log('Sending agent query to Llama-3.1-8b-instruct (NVIDIA NIM)...');
   const result = await callModel(messages, { temperature: 0.2 });
   const rawContent = result.content;
-  
+
   // Log reasoning output if returned
   if (result.reasoning) {
     console.log('\n--- DeepSeek Reasoning ---');
@@ -113,7 +113,7 @@ Full history summary: ${previous_snapshot.entries.length} exchanges recorded.`;
     memory_tags: [],
     confidence: 1.0,
   };
-  
+
   const newAgentEntry: MemoryEntry = {
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
@@ -126,7 +126,7 @@ Full history summary: ${previous_snapshot.entries.length} exchanges recorded.`;
   const newEntries = [...prevEntries, newUserEntry, newAgentEntry];
 
   // 6. Generate session title if it's the first turn
-  const sessionTitle = previous_snapshot?.session_title ?? 
+  const sessionTitle = previous_snapshot?.session_title ??
     `Research: ${user_message.slice(0, 50)}${user_message.length > 50 ? '...' : ''}`;
 
   // 7. Assemble the new memory snapshot (prev_cid will be set by the API handler)
