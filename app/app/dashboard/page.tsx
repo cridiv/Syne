@@ -245,7 +245,14 @@ export default function Home() {
                 body: JSON.stringify({ cids: cidsToVerify })
             });
 
-            if (!res.ok) throw new Error('Verification failed');
+            if (!res.ok) {
+                let errorMsg = 'Verification failed';
+                try {
+                    const text = await res.text();
+                    errorMsg = text.slice(0, 100).replace(/<[^>]*>/g, '') || errorMsg;
+                } catch (_) {}
+                throw new Error(errorMsg);
+            }
             const data = await res.json();
 
             setChainValid(data.valid ? 'valid' : 'broken');

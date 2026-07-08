@@ -67,8 +67,20 @@ export default function ChatPanel({
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Server error');
+        let errorMsg = 'Server error';
+        try {
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await res.json();
+            errorMsg = errorData.error || errorMsg;
+          } else {
+            const text = await res.text();
+            errorMsg = text.slice(0, 150).replace(/<[^>]*>/g, '').trim() || `Status ${res.status}`;
+          }
+        } catch (_) {
+          errorMsg = `Status ${res.status}`;
+        }
+        throw new Error(errorMsg);
       }
 
       const data = await res.json();
