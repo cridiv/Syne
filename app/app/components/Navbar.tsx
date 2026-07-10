@@ -66,7 +66,7 @@ export default function Navbar() {
                         Dashboard
                     </NavLink>
                     <NavLink
-                        href="https://github.com/cridiv/syne"
+                        href="https://github.com/"
                         external
                     >
                         GitHub
